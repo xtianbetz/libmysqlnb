@@ -1,0 +1,84 @@
+MYSQL-NOBLOCK(1)					      MYSQL-NOBLOCK(1)
+
+
+
+NAME
+       query_runner_init,  query_runner_execute, query_runner_get_response_fd,
+       query_runner_get_request_fd,	      query_runner_handle_all_results,
+       query_runner_handle_next_result, query_runner_shutdown,
+
+SYNOPSIS
+       #include "mysql-noblock.h"
+
+       #define RUNNER_RESULT_EAGAIN -1
+       #define RUNNER_RESULT_SQL_ERROR 0
+       #define RUNNER_RESULT_ROWS 1
+       #define RUNNER_RESULT_NONE 2
+
+       query_runner *query_runner_init(char *hostname, char *user,
+				       char *password, char *database);
+
+       void query_runner_execute(query_runner *runner, char *query,
+				 query_runner_callback callback,
+				 void *callback_data );
+
+       int query_runner_get_response_fd(query_runner *runner);
+
+       int query_runner_get_request_fd(query_runner *runner);
+
+       void query_runner_shutdown(query_runner * runner);
+
+       int query_runner_handle_next_result(query_runner *runner);
+
+       void query_runner_handle_all_results(query_runner *runner);
+
+       typedef void (*query_runner_callback)(int, MYSQL_RES *, void *);
+
+
+DESCRIPTION
+       A  simple library for integrating MySQL into non-blocking, event-driven
+       applications. All queries are submitted to a separate thread which sig‐
+       nals  query completion by writing to a UNIX pipe. You can find out when
+       the result is ready by using the file descriptor of the	pipe  in  your
+       own event loops using select(), poll(), etc.
+
+
+USAGE
+       First write a callback for your query:
+
+	void sql_results_callback(int result_code,
+				  MYSQL_RES *res,
+				  void *user_data) {
+	    if (result_code == RUNNER_RESULT_SQL_ERROR) {
+		print("Query Failed!");
+		return;
+	    }
+	    /* Now do something with res (see mysql manual) */
+	}
+
+       Next you will need to start the runner somewhere in your program:
+
+	query_runner_init("myhost","username","password","database");
+
+       To integrate into your I/O event loop, you will need the runner's fd:
+
+	int runner_response_fd = query_runner_get_response_fd();
+
+       To submit queries, use query_runner_execute():
+
+	query_runner_execute(runner,
+			     "SELECT foo FROM bar",
+			     sql_results_callback,
+			     my_data);
+
+       When  the  query  is complete, runner_response_fd will become ready for
+       reading.  DO NOT read directly from the fd, but instead use  query_run‐
+       ner_handle_all_results() or query_runner_handle_next_result(). If there
+       are no results ready these functions will do nothing.
+
+
+
+
+
+
+				 23 January 10		      MYSQL-NOBLOCK(1)
